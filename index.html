@@ -59,85 +59,97 @@
 </div>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
-    import { getFirestore, doc, onSnapshot, updateDoc, increment, setDoc, getDoc, collection, serverTimestamp, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+  import { getFirestore, doc, onSnapshot, updateDoc, increment, setDoc, collection, serverTimestamp, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyD3tna4rUSr_FH0eb08aI3AX3Z-fVcqaj8",
-        authDomain: "fruitsmasmaster.firebaseapp.com",
-        projectId: "fruitsmasmaster",
-        storageBucket: "fruitsmasmaster.firebasestorage.app",
-        messagingSenderId: "673530855742",
-        appId: "1:673530855742:web:ac1395bda6c68f764cac6f"
-    };
+  // Konfigurasi Project Baru lo
+  const firebaseConfig = {
+    apiKey: "AIzaSyDF7Eg437poCL4J4OShMFtm2N6GQtnu01w",
+    authDomain: "multiplayer-5e98b.firebaseapp.com",
+    projectId: "multiplayer-5e98b",
+    storageBucket: "multiplayer-5e98b.firebasestorage.app",
+    messagingSenderId: "549080338588",
+    appId: "1:549080338588:web:bac83f2ffbc77f47f9dd59",
+    measurementId: "G-3W4V3ZT3NF"
+  };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+  // Inisialisasi
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
-    let myId = localStorage.getItem('solo_uid') || "ANON_" + Math.floor(Math.random()*1000);
-    document.getElementById('myId').innerText = myId;
+  // Ambil ID dari Solo Mode supaya sinkron namanya
+  let myId = localStorage.getItem('solo_uid') || "PREDATOR_" + Math.floor(Math.random()*999);
+  document.getElementById('myId').innerText = myId;
 
-    let myContrib = 0;
-    let localBuffer = 0;
+  let myContrib = 0;
+  let localBuffer = 0;
 
-    // 1. SINKRONISASI POPULASI GLOBAL
-    const globalRef = doc(db, "world", "status");
-    onSnapshot(globalRef, (snap) => {
-        if (snap.exists()) {
-            document.getElementById('globalPop').innerText = snap.data().population.toLocaleString('id-ID');
-        } else {
-            setDoc(globalRef, { population: 8000000000 });
-        }
+  // 1. MONITOR POPULASI GLOBAL (Real-time)
+  // Kita simpan di collection "world" dokumen "status"
+  const globalRef = doc(db, "world", "status");
+  
+  onSnapshot(globalRef, (snap) => {
+    if (snap.exists()) {
+        document.getElementById('globalPop').innerText = snap.data().population.toLocaleString('id-ID');
+    } else {
+        // Jika data belum ada di project baru, buat pertama kali
+        setDoc(globalRef, { population: 8000000000 });
+    }
+  });
+
+  // 2. MONITOR BATTLE LOG (Siapa yang lagi gigit)
+  const logQuery = query(collection(db, "battle_logs"), orderBy("time", "desc"), limit(5));
+  onSnapshot(logQuery, (snap) => {
+    const logBox = document.getElementById('logBox');
+    logBox.innerHTML = "";
+    snap.forEach(d => {
+        const data = d.data();
+        const div = document.createElement('div');
+        div.className = "log-entry";
+        div.innerText = `${data.user} melahap ${data.hits} manusia!`;
+        logBox.appendChild(div);
     });
+  });
 
-    // 2. LIVE BATTLE LOG (Siapa yang lagi mukul)
-    const logQuery = query(collection(db, "battle_logs"), orderBy("time", "desc"), limit(5));
-    onSnapshot(logQuery, (snap) => {
-        const logBox = document.getElementById('logBox');
-        logBox.innerHTML = "";
-        snap.forEach(d => {
-            const data = d.data();
-            const div = document.createElement('div');
-            div.className = "log-entry";
-            div.innerText = `${data.user} melahap ${data.hits} manusia!`;
-            logBox.appendChild(div);
-        });
-    });
+  // 3. LOGIKA TOMBOL GIGIT
+  document.getElementById('hitBtn').onclick = () => {
+    localBuffer++; // Simpan di memori dulu (Irit Kuota)
+    myContrib++;
+    document.getElementById('myContrib').innerText = myContrib.toLocaleString();
+    
+    // Efek visual instant di layar biar gak delay
+    let currentPop = parseInt(document.getElementById('globalPop').innerText.replace(/\./g, ''));
+    document.getElementById('globalPop').innerText = (currentPop - 1).toLocaleString('id-ID');
+    
+    if(navigator.vibrate) navigator.vibrate(20);
+  };
 
-    // 3. LOGIKA GIGIT (MULTI-SYNC)
-    document.getElementById('hitBtn').onclick = () => {
-        localBuffer++;
-        myContrib++;
-        document.getElementById('myContrib').innerText = myContrib.toLocaleString();
+  // 4. SISTEM PENGIRIMAN DATA (THE SAVIOUR)
+  // Data dikirim tiap 3 detik. Mau diklik 1000x, tetep cuma dihitung 1-2 Write.
+  setInterval(async () => {
+    if (localBuffer > 0) {
+        const hitsToSend = localBuffer;
+        localBuffer = 0; // Reset buffer
         
-        // Efek visual cepat
-        let currentPop = parseInt(document.getElementById('globalPop').innerText.replace(/\./g, ''));
-        document.getElementById('globalPop').innerText = (currentPop - 1).toLocaleString('id-ID');
-        
-        if(navigator.vibrate) navigator.vibrate(20);
-    };
-
-    // 4. PENGIRIMAN DATA BERKALA (HEMAT KUOTA)
-    // Biarpun di-spam klik, data cuma lapor tiap 3 detik
-    setInterval(async () => {
-        if (localBuffer > 0) {
-            const hitsToSend = localBuffer;
-            localBuffer = 0;
-            
-            // Update Populasi Dunia
+        try {
+            // Kurangi populasi dunia secara massal
             await updateDoc(globalRef, {
                 population: increment(-hitsToSend)
             });
 
-            // Kirim ke Log Battle
+            // Catat di log pertempuran
             await addDoc(collection(db, "battle_logs"), {
                 user: myId,
                 hits: hitsToSend,
                 time: serverTimestamp()
             });
+        } catch (e) {
+            console.error("Gagal sinkron global: ", e);
         }
-    }, 3000);
+    }
+  }, 3000);
 
 </script>
+
 </body>
 </html>
