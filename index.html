@@ -1,45 +1,143 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ikuti saluran ini!</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body>
-
-
-  <script>
-    const colors = ['#FF5733', '#33FF57', '#3357FF', '#F0F030', '#8A2BE2'];
-    let colorIndex = 0;
-
-    function changeBackgroundColor() {
-      document.body.style.backgroundColor = colors[colorIndex];
-      colorIndex = (colorIndex + 1) % colors.length;
-    }
-
-    // Mengubah warna setiap 3 detik (3000 milidetik)
-    setInterval(changeBackgroundColor, 300);
-  </script>
-
-</body>
-
-<body>
-    <div class="container">
-        <h1>Ikuti saluran ini!!</h1>
-
-        <div class="section">
-            <h2>Atau saluran ini gw hack </h2>
-            <div id="daftar-barang" class="item-list">
-                </div>
-        </div>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Predator Bumi - GLOBAL BATTLE</title>
+    <style>
+        :root { --primary: #ff3333; --accent: #ffd700; --bg: #050505; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: var(--bg); color: #eee; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; }
         
-<a href="https://whatsapp.com/channel/0029Vb62wZtGJP8QwMKEjp1F" class="button">Mau ikut saluran? klik</a>
+        .header { background: linear-gradient(to bottom, #200, #000); width: 100%; padding: 15px; text-align: center; border-bottom: 2px solid var(--primary); }
+        .container { width: 100%; max-width: 400px; padding: 20px; }
+        
+        .global-stats { background: rgba(255,0,0,0.1); border: 1px solid var(--primary); padding: 15px; border-radius: 15px; margin-bottom: 20px; }
+        #globalPop { font-size: 2.5rem; font-weight: 900; color: var(--primary); text-shadow: 0 0 10px red; }
+        
+        .btn-gigit { 
+            width: 100%; padding: 50px 10px; font-size: 2.5rem; font-weight: 900; color: #fff; 
+            background: radial-gradient(circle, #ff0000, #600); border: none; border-radius: 50%; 
+            cursor: pointer; box-shadow: 0 0 20px rgba(255,0,0,0.5); transition: 0.1s;
+        }
+        .btn-gigit:active { transform: scale(0.95); box-shadow: 0 0 5px red; }
 
+        .battle-log { background: #111; height: 120px; overflow-y: hidden; border-radius: 10px; margin-top: 20px; padding: 10px; font-size: 0.8rem; border: 1px solid #333; }
+        .log-entry { color: #888; margin-bottom: 4px; border-left: 2px solid var(--primary); padding-left: 8px; animation: slideIn 0.3s ease; }
+        
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        
+        .player-status { font-size: 0.7rem; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body>
 
+<div class="header">
+    <h2 style="margin:0; color:var(--primary);">GLOBAL BATTLE</h2>
+    <small id="onlineCount">Mencari pemain lain...</small>
+</div>
 
-    <script src="script.js"></script>
+<div class="container">
+    <div class="global-stats">
+        <small>POPULASI DUNIA (SHARED)</small><br>
+        <span id="globalPop">8.000.000.000</span>
+    </div>
+
+    <button class="btn-gigit" id="hitBtn">GIGIT!</button>
+
+    <div class="battle-log" id="logBox">
+        <div class="log-entry">Menghubungkan ke server global...</div>
+    </div>
+
+    <div class="player-status">
+        ID KAMU: <b id="myId" style="color:var(--accent);">---</b><br>
+        KONTRIBUSI: <b id="myContrib">0</b>
+    </div>
+    
+    <a href="index.html" style="display:block; margin-top:20px; color:#555; text-decoration:none; font-size:0.8rem;">← KEMBALI KE SOLO MODE</a>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+    import { getFirestore, doc, onSnapshot, updateDoc, increment, setDoc, getDoc, collection, serverTimestamp, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyD3tna4rUSr_FH0eb08aI3AX3Z-fVcqaj8",
+        authDomain: "fruitsmasmaster.firebaseapp.com",
+        projectId: "fruitsmasmaster",
+        storageBucket: "fruitsmasmaster.firebasestorage.app",
+        messagingSenderId: "673530855742",
+        appId: "1:673530855742:web:ac1395bda6c68f764cac6f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let myId = localStorage.getItem('solo_uid') || "ANON_" + Math.floor(Math.random()*1000);
+    document.getElementById('myId').innerText = myId;
+
+    let myContrib = 0;
+    let localBuffer = 0;
+
+    // 1. SINKRONISASI POPULASI GLOBAL
+    const globalRef = doc(db, "world", "status");
+    onSnapshot(globalRef, (snap) => {
+        if (snap.exists()) {
+            document.getElementById('globalPop').innerText = snap.data().population.toLocaleString('id-ID');
+        } else {
+            setDoc(globalRef, { population: 8000000000 });
+        }
+    });
+
+    // 2. LIVE BATTLE LOG (Siapa yang lagi mukul)
+    const logQuery = query(collection(db, "battle_logs"), orderBy("time", "desc"), limit(5));
+    onSnapshot(logQuery, (snap) => {
+        const logBox = document.getElementById('logBox');
+        logBox.innerHTML = "";
+        snap.forEach(d => {
+            const data = d.data();
+            const div = document.createElement('div');
+            div.className = "log-entry";
+            div.innerText = `${data.user} melahap ${data.hits} manusia!`;
+            logBox.appendChild(div);
+        });
+    });
+
+    // 3. LOGIKA GIGIT (MULTI-SYNC)
+    document.getElementById('hitBtn').onclick = () => {
+        localBuffer++;
+        myContrib++;
+        document.getElementById('myContrib').innerText = myContrib.toLocaleString();
+        
+        // Efek visual cepat
+        let currentPop = parseInt(document.getElementById('globalPop').innerText.replace(/\./g, ''));
+        document.getElementById('globalPop').innerText = (currentPop - 1).toLocaleString('id-ID');
+        
+        if(navigator.vibrate) navigator.vibrate(20);
+    };
+
+    // 4. PENGIRIMAN DATA BERKALA (HEMAT KUOTA)
+    // Biarpun di-spam klik, data cuma lapor tiap 3 detik
+    setInterval(async () => {
+        if (localBuffer > 0) {
+            const hitsToSend = localBuffer;
+            localBuffer = 0;
+            
+            // Update Populasi Dunia
+            await updateDoc(globalRef, {
+                population: increment(-hitsToSend)
+            });
+
+            // Kirim ke Log Battle
+            await addDoc(collection(db, "battle_logs"), {
+                user: myId,
+                hits: hitsToSend,
+                time: serverTimestamp()
+            });
+        }
+    }, 3000);
+
+</script>
 </body>
 </html>
